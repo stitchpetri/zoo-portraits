@@ -34,7 +34,7 @@ jobs:
       # IMPORTANT: set base-href to "/<repo-name>/" for GitHub Pages
       # If your repo is your user/organization page (username.github.io), use "/" instead.
       - name: Build Flutter web
-        run: flutter build web --release --base-href "/zoo_portraits/"
+        run: flutter build web --release --base-href "/zoo-portraits/"
 
       # Upload the web build as the Pages artifact
       - uses: actions/upload-pages-artifact@v3
