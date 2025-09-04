@@ -4,9 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/portrait.dart';
 
-
 class PortraitsService {
-  final String jsonUrl;
+  final String jsonUrl; // <-- name the field
   PortraitsService(this.jsonUrl);
 
   static const _kCacheKey = 'portraits_json_cache';
