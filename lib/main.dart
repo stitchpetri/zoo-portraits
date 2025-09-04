@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:zoo_portraits/ui/pages/detail_page.dart';
-
+import 'ui/pages/detail_page.dart';
 import 'ui/pages/home_page.dart';
 
 /// Listenable that notifies GoRouter when the auth state changes.
