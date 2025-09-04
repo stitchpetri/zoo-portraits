@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/portrait.dart';
 
 class PortraitsService {
-  final String jsonUrl; // <-- name the field
+  final String jsonUrl;
   PortraitsService(this.jsonUrl);
 
   static const _kCacheKey = 'portraits_json_cache';
@@ -14,23 +15,45 @@ class PortraitsService {
     final prefs = await SharedPreferences.getInstance();
 
     try {
-      // try network first
+      if (kDebugMode) {
+        debugPrint('🌐 Fetching portraits from $jsonUrl');
+      }
+
       final res = await http.get(Uri.parse(jsonUrl));
+
+      if (kDebugMode) {
+        debugPrint('➡️ Response code: ${res.statusCode}');
+      }
+
       if (res.statusCode == 200) {
+        if (kDebugMode) {
+          debugPrint('✅ Loaded portraits from network (${res.body.length} bytes)');
+        }
         await prefs.setString(_kCacheKey, res.body);
         return _parse(res.body);
+      } else {
+        if (kDebugMode) {
+          debugPrint('⚠️ Network request failed with ${res.statusCode}');
+        }
       }
-    } catch (_) {
-      // ignore network errors, fall back to cache
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('❌ Exception while fetching: $e');
+      }
     }
 
     // fallback: cached data if available
     final cached = prefs.getString(_kCacheKey);
     if (cached != null) {
+      if (kDebugMode) {
+        debugPrint('📦 Loaded portraits from cache');
+      }
       return _parse(cached);
     }
 
-    // no network, no cache
+    if (kDebugMode) {
+      debugPrint('🚨 No portraits available (no network, no cache)');
+    }
     return [];
   }
 
