@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '/models/portrait.dart';
-import '/data/portraits_service.dart';
+
+// Use relative imports from lib/ui/pages/... up to lib/
+import '../../models/portrait.dart';
+import '../../data/portraits_service.dart';
 // If you add cached_network_image to pubspec, you can use it below.
 // import 'package:cached_network_image/cached_network_image.dart';
 
@@ -21,10 +23,9 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   String? _error;
 
-  // Point this at your raw GitHub JSON
+  // ✅ Correct raw GitHub URL — no extra text, proper quotes/parens
   final service = PortraitsService(
-    'final portraitsService = PortraitsService(
-				'https://raw.githubusercontent.com/stitchpetri/zoo-portraits-content/main/data/portraits.json',
+    'https://raw.githubusercontent.com/stitchpetri/zoo-portraits-content/main/data/portraits.json',
   );
 
   @override
@@ -178,7 +179,7 @@ class _HomePageState extends State<HomePage> {
                   childCount: filtered.length,
                 ),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 240, // ~tile width; tweak 200–300
+                  maxCrossAxisExtent: 240,
                   childAspectRatio: 3 / 4,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
@@ -217,7 +218,6 @@ class _PortraitCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () {
-        // If you use go_router with a detail route like /detail/:id
         context.push('/detail/${p.id}');
       },
       child: Card(
@@ -226,16 +226,10 @@ class _PortraitCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: Column(
           children: [
-            // Image
             Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Use CachedNetworkImage here if you add the package
-                  // CachedNetworkImage(imageUrl: p.thumb ?? p.image, fit: BoxFit.cover,
-                  //   placeholder: (_, __) => const Center(child: CircularProgressIndicator()),
-                  //   errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image)),
-                  // ),
                   Image.network(
                     p.thumb ?? p.image,
                     fit: BoxFit.cover,
@@ -246,8 +240,6 @@ class _PortraitCard extends StatelessWidget {
                       return const Center(child: CircularProgressIndicator());
                     },
                   ),
-
-                  // Small date badge (optional)
                   if ((p.date ?? '').isNotEmpty)
                     Positioned(
                       left: 8,
@@ -273,14 +265,11 @@ class _PortraitCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Info
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Name (or slug if unnamed)
                   Text(
                     (p.name == null || p.name!.trim().isEmpty)
                         ? _titleFromSlug(p)
@@ -310,9 +299,7 @@ class _PortraitCard extends StatelessWidget {
   }
 
   String _titleFromSlug(Portrait p) {
-    // Fallback when name is null (e.g., unknown-llama)
-    // Show "Unknown" for the name-like part of the slug
-    final slug = (p as dynamic).slug ?? ''; // if you added slug to the model
+    final slug = (p as dynamic).slug ?? '';
     if (slug.isEmpty) return 'Unknown';
     final parts = slug.split('-');
     if (parts.isEmpty) return 'Unknown';
