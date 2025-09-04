@@ -23,7 +23,8 @@ class _HomePageState extends State<HomePage> {
 
   // Point this at your raw GitHub JSON
   final service = PortraitsService(
-    'https://raw.githubusercontent.com/stitchpetri/zoo-portraits-content/refs/heads/main/data/portraits.json',
+    'final portraitsService = PortraitsService(
+				'https://raw.githubusercontent.com/stitchpetri/zoo-portraits-content/main/data/portraits.json',
   );
 
   @override
