@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
-import '../../models/portrait.dart';
-import '../../data/portrait_repository.dart'; // 👈 use the repository, not the seed
+import '/models/portrait.dart';
+import '/data/portraits_service.dart';
+// If you add cached_network_image to pubspec, you can use it below.
+// import 'package:cached_network_image/cached_network_image.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -11,15 +12,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final repo = LocalAssetPortraitRepository(); // reads assets/portraits.json
-
+  // UI state
   String query = '';
   final Set<String> activeTags = {};
 
-  // data + loading/error state
+  // Data state
   List<Portrait> _all = [];
   bool _loading = true;
   String? _error;
+
+  // Point this at your raw GitHub JSON
+  final service = PortraitsService(
+    'https://raw.githubusercontent.com/stitchpetri/zoo-portraits-content/refs/heads/main/data/portraits.json',
+  );
 
   @override
   void initState() {
@@ -28,151 +33,175 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final data = await repo.loadAll();
-      if (!mounted) return;
-      setState(() {
-        _all = data;
-        _loading = false;
-      });
+      final data = await service.fetch();
+      setState(() => _all = data);
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final tags = _collectTags(_all);
+  List<String> _collectTags(List<Portrait> list) {
+    final set = <String>{};
+    for (final p in list) {
+      for (final t in p.tags) {
+        if (t.trim().isNotEmpty) set.add(t);
+      }
+    }
+    final tags = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return tags;
+  }
 
-    final filtered = _all.where((p) {
-      final q = query.trim().toLowerCase();
+  List<Portrait> _applyFilters() {
+    final q = query.trim().toLowerCase();
+    return _all.where((p) {
       final matchesText =
           q.isEmpty ||
-          p.name.toLowerCase().contains(q) ||
+          (p.name?.toLowerCase().contains(q) ?? false) ||
           p.species.toLowerCase().contains(q) ||
           p.tags.any((t) => t.toLowerCase().contains(q));
+
       final matchesTags =
           activeTags.isEmpty || activeTags.every((t) => p.tags.contains(t));
       return matchesText && matchesTags;
     }).toList();
+  }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Austin Zoo Portraits'),
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    Widget body;
+    if (_loading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (_error != null) {
+      body = Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Search
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search by name, species, or tag…',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (v) => setState(() => query = v),
-            ),
+            Text('Error loading portraits', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _load,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      final tags = _collectTags(_all);
+      final filtered = _applyFilters();
 
-            // Tag chips
-            if (!_loading && _error == null && tags.isNotEmpty)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: tags.map((t) {
-                    final selected = activeTags.contains(t);
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        label: Text(t),
-                        selected: selected,
-                        onSelected: (_) {
-                          setState(() {
-                            selected ? activeTags.remove(t) : activeTags.add(t);
-                          });
-                        },
-                        backgroundColor: const Color(0xFF1F2327),
-                        selectedColor: Theme.of(
-                          context,
-                        ).colorScheme.primaryContainer,
-                        labelStyle: TextStyle(
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w400,
+      body = RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Search
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Search by name, species, or tag…',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        showCheckmark: false,
+                        isDense: true,
                       ),
-                    );
-                  }).toList(),
+                      onChanged: (v) => setState(() => query = v),
+                    ),
+                    const SizedBox(height: 10),
+                    // Tag chips
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('All'),
+                            selected: activeTags.isEmpty,
+                            onSelected: (_) =>
+                                setState(() => activeTags.clear()),
+                          ),
+                          const SizedBox(width: 8),
+                          ...tags.map(
+                            (t) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: FilterChip(
+                                label: Text(t),
+                                selected: activeTags.contains(t),
+                                onSelected: (sel) => setState(() {
+                                  if (sel) {
+                                    activeTags.add(t);
+                                  } else {
+                                    activeTags.remove(t);
+                                  }
+                                }),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Small count line
+                    Text(
+                      '${filtered.length} of ${_all.length} portraits',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.hintColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            if (!_loading && _error == null && tags.isNotEmpty)
-              const SizedBox(height: 12),
-
-            // Content area
-            Expanded(
-              child: Builder(
-                builder: (_) {
-                  if (_loading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (_error != null) {
-                    return Center(
-                      child: Text(
-                        'Could not load portraits:\n$_error',
-                        textAlign: TextAlign.center,
-                      ),
-                    );
-                  }
-                  if (filtered.isEmpty) {
-                    return const Center(
-                      child: Text('No portraits match your filters yet.'),
-                    );
-                  }
-
-                  return LayoutBuilder(
-                    builder: (context, c) {
-                      final w = c.maxWidth;
-                      final cols = w >= 1200
-                          ? 4
-                          : w >= 900
-                          ? 3
-                          : w >= 600
-                          ? 2
-                          : 1;
-                      return GridView.builder(
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: cols,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 3 / 4,
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (_, i) => _PortraitCard(p: filtered[i]),
-                      );
-                    },
-                  );
-                },
+            ),
+            // Grid
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              sliver: SliverGrid(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) => _PortraitCard(p: filtered[i]),
+                  childCount: filtered.length,
+                ),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 240, // ~tile width; tweak 200–300
+                  childAspectRatio: 3 / 4,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  List<String> _collectTags(List<Portrait> list) {
-    final s = <String>{};
-    for (final p in list) {
-      s.addAll(p.tags);
+      );
     }
-    final out = s.toList()..sort();
-    return out;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Zoo Portraits'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: body,
+    );
   }
 }
 
@@ -182,55 +211,95 @@ class _PortraitCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isAssetPath = p.imageUrl.startsWith('assets/');
+    final theme = Theme.of(context);
 
-    return Card(
-      clipBehavior: Clip.hardEdge,
-      child: InkWell(
-        onTap: () => context.go('/detail/${p.id}'),
-        hoverColor: cs.primary.withOpacity(0.08),
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () {
+        // If you use go_router with a detail route like /detail/:id
+        context.push('/detail/${p.id}');
+      },
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // image
+            // Image
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: isAssetPath
-                      ? Image.asset(
-                          p.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const _BrokenImage(),
-                        )
-                      : Image.network(
-                          p.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const _BrokenImage(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Use CachedNetworkImage here if you add the package
+                  // CachedNetworkImage(imageUrl: p.thumb ?? p.image, fit: BoxFit.cover,
+                  //   placeholder: (_, __) => const Center(child: CircularProgressIndicator()),
+                  //   errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image)),
+                  // ),
+                  Image.network(
+                    p.thumb ?? p.image,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Center(child: Icon(Icons.broken_image)),
+                    loadingBuilder: (ctx, child, evt) {
+                      if (evt == null) return child;
+                      return const Center(child: CircularProgressIndicator());
+                    },
+                  ),
+
+                  // Small date badge (optional)
+                  if ((p.date ?? '').isNotEmpty)
+                    Positioned(
+                      left: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                ),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          p.date!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
-            // text
+
+            // Info
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  p.name,
-                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    fontWeight: FontWeight.w700,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name (or slug if unnamed)
+                  Text(
+                    (p.name == null || p.name!.trim().isEmpty)
+                        ? _titleFromSlug(p)
+                        : p.name!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                subtitle: Text(
-                  p.species,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall!.copyWith(color: Colors.white70),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    p.species,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.hintColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -238,13 +307,16 @@ class _PortraitCard extends StatelessWidget {
       ),
     );
   }
-}
 
-class _BrokenImage extends StatelessWidget {
-  const _BrokenImage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(child: Icon(Icons.broken_image_outlined));
+  String _titleFromSlug(Portrait p) {
+    // Fallback when name is null (e.g., unknown-llama)
+    // Show "Unknown" for the name-like part of the slug
+    final slug = (p as dynamic).slug ?? ''; // if you added slug to the model
+    if (slug.isEmpty) return 'Unknown';
+    final parts = slug.split('-');
+    if (parts.isEmpty) return 'Unknown';
+    final first = parts.first;
+    if (first.toLowerCase() == 'unknown') return 'Unknown';
+    return '${first[0].toUpperCase()}${first.substring(1)}';
   }
 }
