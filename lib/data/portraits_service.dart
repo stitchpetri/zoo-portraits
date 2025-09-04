@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/portrait.dart';
 
+
 class PortraitsService {
   final String jsonUrl;
   PortraitsService(this.jsonUrl);
