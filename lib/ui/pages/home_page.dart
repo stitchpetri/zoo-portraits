@@ -192,17 +192,36 @@ class _HomePageState extends State<HomePage> {
     }
 
     return Scaffold(
+      extendBodyBehindAppBar: true, // 👈 lets body go under AppBar
       appBar: AppBar(
-        title: const Text('Zoo Portraits'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _load,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
+        title: Row(
+          children: [
+            Image.asset('../assets/austinzoologo.webp', height: 62),
+            const SizedBox(width: 8),
+            const Text(
+              "Animals of Austin Zoo",
+              textScaler: TextScaler.linear(2),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
-      body: body,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.center, // 👈 stops halfway down
+            colors: [
+              Color(0xFFc47b25), // zoo orange
+              Color(0xFF32302C), // dark bg
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: body, // 👈 your portraits content
+        ),
+      ),
     );
   }
 }
